@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from html import unescape
 
 import requests
 
@@ -33,17 +35,31 @@ def split_message(text: str, limit: int = MESSAGE_LIMIT) -> list[str]:
     return chunks
 
 
-def send(text: str) -> None:
+def to_plain(text: str) -> str:
+    """Quita el formato HTML, por si Telegram rechaza el mensaje con formato."""
+    return unescape(re.sub(r"</?[bi]>", "", text))
+
+
+def _post(token: str, chat_id: str, text: str, html: bool) -> None:
+    payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    if html:
+        payload["parse_mode"] = "HTML"
+    response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=20)
+    response.raise_for_status()
+
+
+def send(text: str, html: bool = False) -> None:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     for chunk in split_message(text):
         try:
-            response = requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True},
-                timeout=20,
-            )
-            response.raise_for_status()
+            try:
+                _post(token, chat_id, chunk, html)
+            except requests.HTTPError as exc:
+                # 400: formato rechazado. Mejor un informe sin negritas que ninguno.
+                if not html or exc.response is None or exc.response.status_code != 400:
+                    raise
+                _post(token, chat_id, to_plain(chunk), False)
         except requests.RequestException as exc:
             status = exc.response.status_code if exc.response is not None else "sin respuesta"
             # "from None" evita que la URL con el token aparezca en los logs.

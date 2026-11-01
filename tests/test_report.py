@@ -79,9 +79,3 @@ def test_market_analysis_without_rotation_or_sides():
     text = "\n".join(build_market_analysis(flat, []))
     assert "Sin señales claras" in text
     assert text.count("- Ninguno.") == 2
-
-
-def test_brief_report_warns_about_ai_opinions():
-    text = build_report("x", [], [], [], None, {}, brief=True)
-    assert "opiniones generadas por IA" in text
-    assert "no una recomendación" not in text

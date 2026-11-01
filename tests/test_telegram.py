@@ -51,3 +51,43 @@ def test_send_error_never_exposes_the_token(monkeypatch, credentials, response, 
     assert "TOKEN-SECRETO" not in str(error.value)
     assert error.value.__cause__ is None
     assert error.value.__suppress_context__ is True
+
+
+def test_html_is_sent_with_parse_mode(monkeypatch, credentials):
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json)
+        return SimpleNamespace(raise_for_status=lambda: None)
+
+    monkeypatch.setattr(telegram.requests, "post", fake_post)
+    telegram.send("<b>hola</b>", html=True)
+    assert sent[0]["parse_mode"] == "HTML"
+
+
+def test_rejected_html_falls_back_to_plain_text(monkeypatch, credentials):
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json)
+        if "parse_mode" in json:
+            raise requests.HTTPError("400", response=SimpleNamespace(status_code=400))
+        return SimpleNamespace(raise_for_status=lambda: None)
+
+    monkeypatch.setattr(telegram.requests, "post", fake_post)
+    telegram.send("<b>S&amp;P</b> <i>baja</i>", html=True)
+    assert sent[-1]["text"] == "S&P baja"
+    assert "parse_mode" not in sent[-1]
+
+
+def test_other_http_errors_do_not_retry(monkeypatch, credentials):
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json)
+        raise requests.HTTPError("401", response=SimpleNamespace(status_code=401))
+
+    monkeypatch.setattr(telegram.requests, "post", fake_post)
+    with pytest.raises(telegram.TelegramError, match="401"):
+        telegram.send("<b>hola</b>", html=True)
+    assert len(sent) == 1

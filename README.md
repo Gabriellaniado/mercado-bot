@@ -6,7 +6,7 @@ Revisa el S&P 500, materias primas (oro, plata, petróleo, uranio, etc.) y accio
 - **Análisis de mercado**: sectores mejores y peores que el S&P 500 y posibles rotaciones (por ejemplo, de semiconductores a software), calculados solo con precios. Indican que un sector le ganó a otro, no por qué.
 - **Mercado local**: MSCI Merval en pesos y en dólares CCL, riesgo país, dólares y las acciones del panel que más suben y bajan.
 - **Grandes movimientos**: hasta 3 variaciones fuera de lo normal (según la volatilidad de los últimos 20 días), primero las que tienen CEDEAR. Del S&P 500 solo entran empresas de más de US$100.000 millones (`min_market_cap_usd_bn`).
-- **A revisar**: hasta 3 activos con CEDEAR muy por debajo de su máximo anual y sobrevendidos (RSI) o cerca de su mínimo de 52 semanas.
+- **A revisar**: hasta 2 activos con CEDEAR muy por debajo de su máximo anual y sobrevendidos (RSI) o cerca de su mínimo de 52 semanas.
 - **Contexto de cada activo**: si reaccionó a un balance, si acompaña a su sector, ventas, margen, valuación, opinión de analistas y qué falta confirmar.
 - **Noticias**: usa **solo fuentes de una lista confiable** (`trusted_sources` en `config.yaml`). Si no hay titulares de esas fuentes, lo dice en lugar de inventar una causa.
 
@@ -27,8 +27,7 @@ pip install -r requirements-dev.txt
 copy .env.example .env          # completá el token y el chat id
 python -m bot.main --dry-run    # imprime el informe sin enviarlo
 python -m bot.main              # lo envía por Telegram
-python -m bot.main --dry-run --brief        # versión corta, para sumarle un resumen
-python -m bot.main --send-file informe.txt  # envía un informe ya redactado
+python -m bot.main --analysis analisis.json # informe final con el análisis de la rutina
 ```
 
 ### 3. Correrlo desde GitHub
@@ -41,6 +40,26 @@ ruff check .         # errores y malas prácticas
 ruff format .        # formato
 ```
 Los tests no usan internet ni mandan mensajes. El workflow `ci.yml` corre estos controles en cada push.
+
+## Análisis de la rutina diaria
+La rutina investiga las causas y escribe un JSON. El bot lo valida y arma el mensaje, así el formato no depende del agente:
+```json
+{
+  "global": "Una línea sobre el mercado de EE.UU.",
+  "local": "Una línea sobre el mercado argentino.",
+  "assets": {
+    "INTC": {
+      "recommendation": "mantener",
+      "confidence": "media",
+      "target": 72.5,
+      "target_basis": "Cómo se calculó",
+      "cause": "Causa breve",
+      "source": "Fuente"
+    }
+  }
+}
+```
+`recommendation` admite `comprar`, `mantener`, `vender` o `null`, y `confidence` admite `alta`, `media` o `baja`. `target` es opcional, pero exige `target_basis`.
 
 ## Configuración
 Todo se edita en `config.yaml`:
@@ -69,7 +88,8 @@ bot/
   fundamentals.py  # contexto de cada activo: balance, sector, negocio, valuación
   news.py          # noticias de Yahoo y RSS, filtradas por fuentes confiables
   summarize.py     # resumen opcional con la API de Anthropic
-  report.py        # arma el texto del informe
+  report.py        # informe sin IA, en texto
+  analyst.py       # valida el análisis de la rutina y arma el informe final
   telegram.py      # envío por Telegram
 tests/             # pytest, sin red
 ```

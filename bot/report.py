@@ -5,13 +5,6 @@ from __future__ import annotations
 DISCLAIMER = "⚠️ Son señales automáticas para revisar, no una recomendación de inversión."
 
 
-DISCLAIMER_WITH_OPINIONS = (
-    "⚠️ Las recomendaciones y los precios objetivo son opiniones generadas por IA y pueden tener errores. "
-    "Verificalos antes de operar."
-)
-BRIEF_OMITS = ("🏭", "📰", "❓")
-
-
 def fmt_pct(x: float) -> str:
     return f"{x:+.1f}%"
 
@@ -71,11 +64,6 @@ def build_local_section(local: dict) -> list[str]:
     return out
 
 
-def keep_context_line(line: str, brief: bool) -> bool:
-    """En el informe breve, el resumen ya explica las causas y cita las fuentes."""
-    return not (brief and line.startswith(BRIEF_OMITS))
-
-
 def build_report(
     date_str: str,
     panorama: list[tuple[str, float]],
@@ -86,7 +74,6 @@ def build_report(
     sectors: list[dict] | None = None,
     rotations: list[dict] | None = None,
     local: dict | None = None,
-    brief: bool = False,
 ) -> str:
     out = [f"📊 Informe de mercado - {date_str}", ""]
 
@@ -114,7 +101,7 @@ def build_report(
             vol = f", volumen x{ratio:.1f}" if ratio is not None and ratio >= 1.5 else ""
             title = f"{m['symbol']} ({m['name']}) {fmt_pct(m['ret_pct'])}{vol} {m['tag']}".rstrip()
             out.append(f"{trend(m['ret_pct'])} {title}")
-            out += [line for line in m.get("why", []) if keep_context_line(line, brief)]
+            out += m.get("why", [])
             out.append("")
     else:
         out += ["Sin movimientos fuera de lo normal.", ""]
@@ -127,16 +114,16 @@ def build_report(
             if o["symbol"] in mover_symbols:
                 out.append("Contexto en Grandes movimientos.")
             else:
-                out += [line for line in o.get("why", []) if keep_context_line(line, brief)]
+                out += o.get("why", [])
             out.append("")
     else:
         out += ["Ninguna señal hoy.", ""]
 
     sources = [(sym, n) for sym, items in news.items() for n in items[:1] if n.get("url")]
-    if sources and not brief:
+    if sources:
         out.append("🔗 Fuentes")
         out += [f"{sym} ({n['source']}): {n['url']}" for sym, n in sources]
         out.append("")
 
-    out.append(DISCLAIMER_WITH_OPINIONS if brief else DISCLAIMER)
+    out.append(DISCLAIMER)
     return "\n".join(out)

@@ -1,3 +1,4 @@
+import json
 import sys
 
 import pytest
@@ -78,15 +79,6 @@ def test_build_text_end_to_end(cfg, offline):
     assert "🟢 Suben: Galicia +3.0%" in text
 
 
-def test_brief_text_drops_what_the_summary_explains(cfg, offline):
-    text = main.build_text(cfg, brief=True)
-    assert "📰" not in text
-    assert "🏭" not in text
-    assert "❓" not in text
-    assert "🔗" not in text
-    assert "🔴 INTC (Intel) -20.0%" in text
-
-
 def test_build_text_without_prices_has_no_date(cfg, offline, monkeypatch):
     monkeypatch.setattr(main, "download_prices", lambda symbols: {})
     assert "sin fecha" in main.build_text(cfg)
@@ -109,7 +101,7 @@ def write_config(tmp_path, cfg):
 
 def test_dry_run_prints_and_does_not_send(cfg, offline, monkeypatch, tmp_path, capsys):
     sent = []
-    monkeypatch.setattr(main.telegram, "send", sent.append)
+    monkeypatch.setattr(main.telegram, "send", lambda text, html: sent.append(text))
     main.run(write_config(tmp_path, cfg), dry_run=True)
     assert sent == []
     assert "Informe de mercado" in capsys.readouterr().out
@@ -117,40 +109,19 @@ def test_dry_run_prints_and_does_not_send(cfg, offline, monkeypatch, tmp_path, c
 
 def test_run_sends_by_telegram(cfg, offline, monkeypatch, tmp_path, capsys):
     sent = []
-    monkeypatch.setattr(main.telegram, "send", sent.append)
+    monkeypatch.setattr(main.telegram, "send", lambda text, html: sent.append((text, html)))
     text = main.run(write_config(tmp_path, cfg))
-    assert sent == [text]
+    assert sent == [(text, False)]
     assert capsys.readouterr().out == ""
 
 
 def test_main_passes_command_line_arguments(monkeypatch):
     calls = []
     monkeypatch.setattr(main, "load_dotenv", lambda: None)
-    monkeypatch.setattr(main, "run", lambda path, dry_run, brief: calls.append((path, dry_run, brief)))
-    monkeypatch.setattr(sys, "argv", ["bot", "--config", "otro.yaml", "--dry-run", "--brief"])
+    monkeypatch.setattr(main, "run", lambda path, dry_run, analysis: calls.append((path, dry_run, analysis)))
+    monkeypatch.setattr(sys, "argv", ["bot", "--config", "otro.yaml", "--dry-run", "--analysis", "a.json"])
     main.main()
-    assert calls == [("otro.yaml", True, True)]
-
-
-def test_send_file_sends_the_written_report(monkeypatch, tmp_path):
-    sent = []
-    monkeypatch.setattr(main.telegram, "send", sent.append)
-    report = tmp_path / "informe.txt"
-    report.write_text("📊 Informe\n", encoding="utf-8")
-    monkeypatch.setattr(main, "load_dotenv", lambda: None)
-    monkeypatch.setattr(sys, "argv", ["bot", "--send-file", str(report)])
-    main.main()
-    assert sent == ["📊 Informe"]
-
-
-def test_send_file_rejects_empty_report(monkeypatch, tmp_path):
-    sent = []
-    monkeypatch.setattr(main.telegram, "send", sent.append)
-    report = tmp_path / "informe.txt"
-    report.write_text("  \n", encoding="utf-8")
-    with pytest.raises(ValueError, match="vacío"):
-        main.send_file(str(report))
-    assert sent == []
+    assert calls == [("otro.yaml", True, "a.json")]
 
 
 def test_real_config_is_consistent():
@@ -161,3 +132,27 @@ def test_real_config_is_consistent():
     assert len(cfg["cedears"]) == len(set(cfg["cedears"]))
     assert {symbol for pair in market["rotation_pairs"] for symbol in pair} <= labeled
     assert set(market["sector_map"].values()) | set(market["industry_map"].values()) <= labeled
+
+
+def test_analysis_builds_the_final_html_report(cfg, offline, monkeypatch, tmp_path):
+    analysis_file = tmp_path / "analisis.json"
+    asset = {"recommendation": "vender", "confidence": "baja", "cause": "Caída", "source": "CNBC"}
+    analysis_file.write_text(json.dumps({"assets": {"INTC": asset}}), encoding="utf-8")
+    sent = []
+    monkeypatch.setattr(main.telegram, "send", lambda text, html: sent.append((text, html)))
+    text = main.run(write_config(tmp_path, cfg), analysis_path=str(analysis_file))
+    assert sent == [(text, True)]
+    assert "🔴 <b>VENDER</b> · confianza baja" in text
+    assert "📰" not in text
+
+
+def test_invalid_analysis_fails_before_downloading(cfg, monkeypatch, tmp_path):
+    analysis_file = tmp_path / "analisis.json"
+    analysis_file.write_text("{}", encoding="utf-8")
+
+    def fail(symbols):
+        raise AssertionError("no debería descargar precios")
+
+    monkeypatch.setattr(main, "download_prices", fail)
+    with pytest.raises(ValueError, match="assets"):
+        main.run(write_config(tmp_path, cfg), analysis_path=str(analysis_file))

@@ -9,7 +9,7 @@ import sys
 import yaml
 from dotenv import load_dotenv
 
-from bot import analysis, fundamentals, local_market, news, report, summarize, telegram
+from bot import analysis, analyst, fundamentals, local_market, news, report, summarize, telegram
 from bot.prices import download_prices, drop_stale, market_cap
 from bot.universe import build_universe
 
@@ -54,8 +54,8 @@ def add_explanations(
         entry["why"] = why_by_symbol.get(entry["symbol"], [])
 
 
-def build_text(cfg: dict, brief: bool = False) -> str:
-    """Corre el análisis completo y devuelve el texto del informe."""
+def build_text(cfg: dict, ai_analysis: dict | None = None) -> str:
+    """Corre el análisis completo. Con el análisis de la rutina arma el informe final en HTML."""
     signals_cfg = cfg["signals"]
     market_cfg = cfg.get("market_analysis", {})
 
@@ -74,50 +74,42 @@ def build_text(cfg: dict, brief: bool = False) -> str:
 
     headlines = news.collect_news(flagged, read_feeds(cfg.get("feeds", [])), cfg["trusted_sources"])
     add_explanations(movers, opportunities, flagged, headlines, sectors, market_cfg)
-    narrative = summarize.summarize(flagged, headlines, cfg["summary"])
-
     date_str = last_date.strftime("%d/%m/%Y") if last_date is not None else "sin fecha"
+    if ai_analysis is not None:
+        return analyst.build_final_report(date_str, panorama, sectors, rotations, local, flagged, ai_analysis)
+
+    narrative = summarize.summarize(flagged, headlines, cfg["summary"])
     return report.build_report(
-        date_str, panorama, movers, opportunities, narrative, headlines, sectors, rotations, local, brief
+        date_str, panorama, movers, opportunities, narrative, headlines, sectors, rotations, local
     )
 
 
-def run(cfg_path: str = "config.yaml", dry_run: bool = False, brief: bool = False) -> str:
-    text = build_text(load_config(cfg_path), brief)
+def run(cfg_path: str = "config.yaml", dry_run: bool = False, analysis_path: str | None = None) -> str:
+    # Se valida antes de descargar precios, para que un análisis mal escrito falle enseguida.
+    ai_analysis = analyst.load_analysis(analysis_path) if analysis_path else None
+    text = build_text(load_config(cfg_path), ai_analysis)
     if dry_run:
         print(text)
     else:
-        telegram.send(text)
+        telegram.send(text, html=ai_analysis is not None)
         log.info("Informe enviado por Telegram.")
     return text
-
-
-def send_file(path: str) -> None:
-    """Envía un informe ya redactado, por ejemplo con el resumen de la rutina diaria."""
-    with open(path, encoding="utf-8") as file:
-        text = file.read().strip()
-    if not text:
-        raise ValueError(f"El archivo está vacío: {path}")
-    telegram.send(text)
-    log.info("Informe enviado por Telegram.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Informe diario de mercado")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--dry-run", action="store_true", help="imprime el informe sin enviarlo")
-    parser.add_argument("--brief", action="store_true", help="omite lo que explica el resumen de la rutina")
-    parser.add_argument("--send-file", help="envía por Telegram un informe ya redactado y termina")
+    parser.add_argument(
+        "--analysis", help="JSON de la rutina diaria: arma el informe final con recomendaciones"
+    )
     args = parser.parse_args()
 
     # La consola de Windows puede no soportar los emojis del informe.
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if args.send_file:
-        send_file(args.send_file)
-    else:
-        run(args.config, args.dry_run, args.brief)
+    run(args.config, args.dry_run, args.analysis)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ signals:
   near_52w_low_pct: 5.0      # a menos de 5% del mínimo de 52 semanas
   min_drawdown_pct: 20.0     # y al menos 20% por debajo del máximo de 52 semanas
   max_movers: 3              # máximo de movimientos grandes (primero los que tienen CEDEAR)
-  max_opportunities: 3       # máximo de "a revisar" en el informe
+  max_opportunities: 2       # máximo de "a revisar" en el informe
   min_market_cap_usd_bn: 100 # capitalización mínima del S&P 500, en miles de millones de dólares
   max_news_symbols: 8        # activos para los que se buscan noticias y contexto
 
