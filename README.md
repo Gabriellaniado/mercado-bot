@@ -26,6 +26,7 @@ pip install -r requirements-dev.txt
 copy .env.example .env          # completá el token y el chat id
 python -m bot.main --dry-run    # imprime el informe sin enviarlo
 python -m bot.main              # lo envía por Telegram
+python -m bot.main --send-file informe.txt  # envía un informe ya redactado
 ```
 
 ### 3. Correrlo desde GitHub

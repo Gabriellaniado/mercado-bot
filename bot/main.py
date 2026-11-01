@@ -91,17 +91,31 @@ def run(cfg_path: str = "config.yaml", dry_run: bool = False) -> str:
     return text
 
 
+def send_file(path: str) -> None:
+    """Envía un informe ya redactado, por ejemplo con el resumen de la rutina diaria."""
+    with open(path, encoding="utf-8") as file:
+        text = file.read().strip()
+    if not text:
+        raise ValueError(f"El archivo está vacío: {path}")
+    telegram.send(text)
+    log.info("Informe enviado por Telegram.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Informe diario de mercado")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--dry-run", action="store_true", help="imprime el informe sin enviarlo")
+    parser.add_argument("--send-file", help="envía por Telegram un informe ya redactado y termina")
     args = parser.parse_args()
 
     # La consola de Windows puede no soportar los emojis del informe.
     sys.stdout.reconfigure(encoding="utf-8")
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    run(args.config, args.dry_run)
+    if args.send_file:
+        send_file(args.send_file)
+    else:
+        run(args.config, args.dry_run)
 
 
 if __name__ == "__main__":

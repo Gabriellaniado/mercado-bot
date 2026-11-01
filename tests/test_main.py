@@ -116,6 +116,27 @@ def test_main_passes_command_line_arguments(monkeypatch):
     assert calls == [("otro.yaml", True)]
 
 
+def test_send_file_sends_the_written_report(monkeypatch, tmp_path):
+    sent = []
+    monkeypatch.setattr(main.telegram, "send", sent.append)
+    report = tmp_path / "informe.txt"
+    report.write_text("📊 Informe\n", encoding="utf-8")
+    monkeypatch.setattr(main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(sys, "argv", ["bot", "--send-file", str(report)])
+    main.main()
+    assert sent == ["📊 Informe"]
+
+
+def test_send_file_rejects_empty_report(monkeypatch, tmp_path):
+    sent = []
+    monkeypatch.setattr(main.telegram, "send", sent.append)
+    report = tmp_path / "informe.txt"
+    report.write_text("  \n", encoding="utf-8")
+    with pytest.raises(ValueError, match="vacío"):
+        main.send_file(str(report))
+    assert sent == []
+
+
 def test_real_config_is_consistent():
     cfg = main.load_config("config.yaml")
     market = cfg["market_analysis"]
