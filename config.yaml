@@ -1,0 +1,177 @@
+# Configuración del bot de mercado.
+# Todo lo que sigue se puede editar sin tocar el código.
+
+# Umbrales de señales
+signals:
+  min_move_pct: 4.0          # movimiento diario mínimo (en %) para considerarlo "grande"
+  z_threshold: 2.5           # o 2.5 veces la volatilidad diaria de los últimos 20 días
+  min_move_pct_by_group:     # umbrales propios según el grupo
+    "Materias primas": 2.5
+    "Argentina": 5.0
+    "Brasil": 4.0
+  rsi_oversold: 30           # RSI(14) en o debajo de este valor = sobrevendido
+  near_52w_low_pct: 5.0      # a menos de 5% del mínimo de 52 semanas
+  min_drawdown_pct: 20.0     # y al menos 20% por debajo del máximo de 52 semanas
+  max_movers: 3              # máximo de movimientos grandes (primero los que tienen CEDEAR)
+  max_opportunities: 3       # máximo de "a revisar" en el informe
+  max_news_symbols: 8        # activos para los que se buscan noticias y contexto
+
+# Panorama general (solo se muestra la variación del día)
+panorama:
+  - {symbol: "^GSPC", label: "S&P 500"}
+  - {symbol: "^MERV", label: "Merval"}
+  - {symbol: "^BVSP", label: "Bovespa"}
+  - {symbol: "GC=F", label: "Oro"}
+  - {symbol: "CL=F", label: "Petróleo WTI"}
+  - {symbol: "URA", label: "Uranio (ETF URA)"}
+
+# Análisis de mercado: sectores contra el índice y posibles rotaciones.
+# Una rotación se marca si un activo del par sube, el otro baja y la brecha del día
+# supera tanto rotation_min_gap_pct como rotation_z veces la brecha habitual (20 días).
+market_analysis:
+  benchmark: SPY
+  rotation_min_gap_pct: 1.5
+  rotation_z: 2.0
+  sectors:
+    - {symbol: SMH, label: "Semiconductores"}
+    - {symbol: IGV, label: "Software/SaaS"}
+    - {symbol: XLK, label: "Tecnología"}
+    - {symbol: XLC, label: "Comunicaciones"}
+    - {symbol: XLY, label: "Consumo discrecional"}
+    - {symbol: XLP, label: "Consumo básico"}
+    - {symbol: XLF, label: "Financieras"}
+    - {symbol: XLV, label: "Salud"}
+    - {symbol: XLE, label: "Energía"}
+    - {symbol: XLI, label: "Industriales"}
+    - {symbol: XLB, label: "Materiales"}
+    - {symbol: XLU, label: "Servicios públicos"}
+    - {symbol: XLRE, label: "Inmobiliario"}
+  styles:
+    - {symbol: VUG, label: "Crecimiento"}
+    - {symbol: VTV, label: "Valor"}
+    - {symbol: SPY, label: "Grandes empresas"}
+    - {symbol: IWM, label: "Pequeñas empresas"}
+  # Con qué ETF se compara cada empresa, según la clasificación de Yahoo.
+  # La industria tiene prioridad sobre el sector.
+  industry_map:
+    "Semiconductors": SMH
+    "Semiconductor Equipment & Materials": SMH
+    "Software - Application": IGV
+    "Software - Infrastructure": IGV
+  sector_map:
+    "Technology": XLK
+    "Communication Services": XLC
+    "Consumer Cyclical": XLY
+    "Consumer Defensive": XLP
+    "Financial Services": XLF
+    "Healthcare": XLV
+    "Energy": XLE
+    "Industrials": XLI
+    "Basic Materials": XLB
+    "Utilities": XLU
+    "Real Estate": XLRE
+  rotation_pairs:
+    - [SMH, IGV]    # semiconductores / software
+    - [VUG, VTV]    # crecimiento / valor
+    - [XLY, XLP]    # consumo discrecional / básico
+    - [XLK, XLF]    # tecnología / financieras
+    - [XLK, XLE]    # tecnología / energía
+    - [SPY, IWM]    # grandes / pequeñas empresas
+
+# El S&P 500 se descarga de Wikipedia al ejecutar. Si falla, se usa esta lista corta.
+sp500_fallback:
+  - {symbol: AAPL, name: Apple Inc.}
+  - {symbol: MSFT, name: Microsoft Corp.}
+  - {symbol: AMZN, name: Amazon.com Inc.}
+  - {symbol: GOOGL, name: Alphabet Inc.}
+  - {symbol: META, name: Meta Platforms Inc.}
+  - {symbol: NVDA, name: NVIDIA Corp.}
+  - {symbol: TSLA, name: Tesla Inc.}
+  - {symbol: JPM, name: JPMorgan Chase & Co.}
+  - {symbol: XOM, name: Exxon Mobil Corp.}
+  - {symbol: KO, name: Coca-Cola Co.}
+
+# Otros grupos de activos
+groups:
+  "Materias primas":
+    - {symbol: "GC=F", name: "Oro", keywords: ["gold", "oro"]}
+    - {symbol: "SI=F", name: "Plata", keywords: ["silver", "plata"]}
+    - {symbol: "CL=F", name: "Petróleo WTI", keywords: ["oil", "crude", "petróleo"]}
+    - {symbol: "NG=F", name: "Gas natural", keywords: ["natural gas", "gas natural"]}
+    - {symbol: "HG=F", name: "Cobre", keywords: ["copper", "cobre"]}
+    - {symbol: "URA", name: "Uranio (ETF URA)", keywords: ["uranium", "uranio"]}
+  "Argentina":
+    - {symbol: GGAL, name: "Grupo Financiero Galicia"}
+    - {symbol: YPF, name: "YPF"}
+    - {symbol: BMA, name: "Banco Macro"}
+    - {symbol: PAM, name: "Pampa Energía"}
+    - {symbol: VIST, name: "Vista Energy"}
+    - {symbol: TGS, name: "Transportadora de Gas del Sur"}
+    - {symbol: CEPU, name: "Central Puerto"}
+    - {symbol: EDN, name: "Edenor"}
+    - {symbol: LOMA, name: "Loma Negra"}
+    - {symbol: BBAR, name: "BBVA Argentina"}
+    - {symbol: SUPV, name: "Grupo Supervielle"}
+    - {symbol: TEO, name: "Telecom Argentina"}
+  "Brasil":
+    - {symbol: PBR, name: "Petrobras"}
+    - {symbol: VALE, name: "Vale"}
+    - {symbol: ITUB, name: "Itaú Unibanco"}
+    - {symbol: BBD, name: "Bradesco"}
+    - {symbol: ABEV, name: "Ambev"}
+    - {symbol: NU, name: "Nu Holdings"}
+    - {symbol: EMBJ, name: "Embraer"}
+    - {symbol: EWZ, name: "ETF Brasil (EWZ)", keywords: ["brazil", "brasil"]}
+
+# Activos que tienen CEDEAR en Argentina. Solo estos entran en "posibles oportunidades".
+# Cruce del universo del bot con la lista de programas de Banco Comafi al 30/09/2026:
+# https://www.comafi.com.ar/custodiaglobal/2483-Programas-Cedear.cedearnote.note.aspx
+# URA y EWZ no son de Comafi: los confirman fuentes secundarias, no una lista oficial.
+cedears: [
+  AAPL, ABBV, ABEV, ABT, ACN, ADBE, ADI, ADP, AIG, AMAT, AMD, AMGN, AMZN, ANET, AVGO, AVY, AXP,
+  BA, BAC, BBD, BG, BIIB, BKNG, BKR, BMY, BNY, BRK-B, BX, C, CAH, CAT, CCL, CEG, CL, COIN, COP,
+  COST, CRM, CRWD, CSCO, CVS, CVX, DAL, DD, DE, DECK, DELL, DHR, DIS, DOW, EBAY, ECL, EFX, EMBJ,
+  FCX, FDX, FISV, FSLR, GE, GEV, GILD, GLW, GM, GOOGL, GRMN, GS, HAL, HD, HON, HOOD, HPQ, HSY,
+  HWM, IBKR, IBM, IFF, INTC, IP, ISRG, ITUB, JCI, JNJ, JPM, KLAC, KMB, KO, LIN, LLY, LMT, LRCX,
+  LVS, MA, MCD, MDLZ, MDT, META, MMM, MO, MRK, MRNA, MRSH, MRVL, MS, MSFT, MSI, NEE, NEM, NFLX,
+  NKE, NOW, NU, NUE, NVDA, O, ORCL, ORLY, PBR, PCAR, PEP, PFE, PG, PLD, PLTR, PM, PSX, PYPL, QCOM,
+  ROST, RTX, SBUX, SCHW, SHW, SLB, SNA, SNDK, SPGI, SWKS, SYY, T, TGT, TJX, TMO, TMUS, TRV, TSLA,
+  TWLO, TXN, UNH, UNP, USB, V, VALE, VIST, VRSN, VRTX, VST, VZ, WDC, WELL, WFC, WMT, XOM, XYZ,
+  URA, EWZ,
+]
+
+# Fuentes de noticias confiables. Un titular solo se usa si su fuente o su URL
+# contiene alguno de estos textos (sin importar mayúsculas).
+trusted_sources:
+  - reuters
+  - bloomberg
+  - financial times
+  - ft.com
+  - wsj
+  - wall street journal
+  - barron
+  - cnbc
+  - associated press
+  - apnews
+  - marketwatch
+  - ámbito
+  - ambito
+  - cronista
+  - lanacion
+  - la nación
+  - infomoney
+  - valor econ
+
+# Feeds RSS generales. Verificá que las URLs sigan vigentes: los medios las cambian seguido.
+# Si un feed falla, el bot lo registra y sigue con los demás.
+feeds:
+  - {name: "CNBC", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"}
+  - {name: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"}
+  - {name: "Ámbito", url: "https://www.ambito.com/rss/pages/finanzas.xml"}
+  - {name: "El Cronista", url: "https://www.cronista.com/files/rss/finanzas.xml"}
+  - {name: "InfoMoney", url: "https://www.infomoney.com.br/feed/"}
+
+# Resumen con IA (opcional, requiere ANTHROPIC_API_KEY)
+summary:
+  model: "claude-sonnet-5-5"
+  max_tokens: 1500
