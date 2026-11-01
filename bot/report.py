@@ -5,6 +5,10 @@ from __future__ import annotations
 DISCLAIMER = "⚠️ Son señales automáticas para revisar, no una recomendación de inversión."
 
 
+DISCLAIMER_WITH_OPINIONS = (
+    "⚠️ Las recomendaciones y los precios objetivo son opiniones generadas por IA y pueden tener errores. "
+    "Verificalos antes de operar."
+)
 BRIEF_OMITS = ("🏭", "📰", "❓")
 
 
@@ -134,5 +138,5 @@ def build_report(
         out += [f"{sym} ({n['source']}): {n['url']}" for sym, n in sources]
         out.append("")
 
-    out.append(DISCLAIMER)
+    out.append(DISCLAIMER_WITH_OPINIONS if brief else DISCLAIMER)
     return "\n".join(out)

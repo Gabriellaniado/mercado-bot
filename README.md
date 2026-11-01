@@ -10,7 +10,7 @@ Revisa el S&P 500, materias primas (oro, plata, petróleo, uranio, etc.) y accio
 - **Contexto de cada activo**: si reaccionó a un balance, si acompaña a su sector, ventas, margen, valuación, opinión de analistas y qué falta confirmar.
 - **Noticias**: usa **solo fuentes de una lista confiable** (`trusted_sources` en `config.yaml`). Si no hay titulares de esas fuentes, lo dice en lugar de inventar una causa.
 
-> Son señales automáticas para revisar. No son una recomendación de inversión.
+> El informe del bot son señales automáticas para revisar, no una recomendación de inversión. La rutina diaria le agrega recomendaciones y precios objetivo generados por IA, que pueden tener errores.
 
 ## Puesta en marcha
 
