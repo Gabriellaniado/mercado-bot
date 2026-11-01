@@ -5,6 +5,9 @@ from __future__ import annotations
 DISCLAIMER = "⚠️ Son señales automáticas para revisar, no una recomendación de inversión."
 
 
+BRIEF_OMITS = ("🏭", "📰", "❓")
+
+
 def fmt_pct(x: float) -> str:
     return f"{x:+.1f}%"
 
@@ -36,6 +39,39 @@ def build_market_analysis(sectors: list[dict], rotations: list[dict], top: int =
     return out
 
 
+def build_local_section(local: dict) -> list[str]:
+    out = [f"🇦🇷 Mercado local (rueda del {local['date'].strftime('%d/%m')})"]
+    merval = local.get("merval")
+    if merval:
+        usd = merval.get("usd_ret_pct")
+        in_usd = f" (en dólares CCL {fmt_pct(usd)})" if usd is not None else ""
+        out.append(
+            f"{trend(merval['ret_pct'])} {merval.get('label', 'Merval')} {fmt_pct(merval['ret_pct'])}{in_usd}"
+        )
+    else:
+        out.append("⚪ Merval sin datos.")
+    risk = local.get("country_risk")
+    if risk:
+        out.append(f"🌡️ Riesgo país {risk['value']:.0f} ({risk['change']:+.0f} puntos)")
+    if local.get("dollars"):
+        parts = [f"{d['label']} ${d['value']:,.0f} ({fmt_pct(d['change_pct'])})" for d in local["dollars"]]
+        out.append("💵 " + " | ".join(parts).replace(",", "."))
+    panel, top = local.get("panel", []), local.get("top", 3)
+    if panel:
+        best = [f"{m['label']} {fmt_pct(m['ret_pct'])}" for m in panel[:top] if m["ret_pct"] > 0]
+        worst = [f"{m['label']} {fmt_pct(m['ret_pct'])}" for m in reversed(panel[-top:]) if m["ret_pct"] < 0]
+        if best:
+            out.append("🟢 Suben: " + ", ".join(best))
+        if worst:
+            out.append("🔴 Bajan: " + ", ".join(worst))
+    return out
+
+
+def keep_context_line(line: str, brief: bool) -> bool:
+    """En el informe breve, el resumen ya explica las causas y cita las fuentes."""
+    return not (brief and line.startswith(BRIEF_OMITS))
+
+
 def build_report(
     date_str: str,
     panorama: list[tuple[str, float]],
@@ -45,6 +81,8 @@ def build_report(
     news: dict[str, list[dict]],
     sectors: list[dict] | None = None,
     rotations: list[dict] | None = None,
+    local: dict | None = None,
+    brief: bool = False,
 ) -> str:
     out = [f"📊 Informe de mercado - {date_str}", ""]
 
@@ -55,6 +93,10 @@ def build_report(
 
     if sectors:
         out += build_market_analysis(sectors, rotations or [])
+        out.append("")
+
+    if local:
+        out += build_local_section(local)
         out.append("")
 
     if narrative:
@@ -68,7 +110,7 @@ def build_report(
             vol = f", volumen x{ratio:.1f}" if ratio is not None and ratio >= 1.5 else ""
             title = f"{m['symbol']} ({m['name']}) {fmt_pct(m['ret_pct'])}{vol} {m['tag']}".rstrip()
             out.append(f"{trend(m['ret_pct'])} {title}")
-            out += m.get("why", [])
+            out += [line for line in m.get("why", []) if keep_context_line(line, brief)]
             out.append("")
     else:
         out += ["Sin movimientos fuera de lo normal.", ""]
@@ -81,13 +123,13 @@ def build_report(
             if o["symbol"] in mover_symbols:
                 out.append("Contexto en Grandes movimientos.")
             else:
-                out += o.get("why", [])
+                out += [line for line in o.get("why", []) if keep_context_line(line, brief)]
             out.append("")
     else:
         out += ["Ninguna señal hoy.", ""]
 
     sources = [(sym, n) for sym, items in news.items() for n in items[:1] if n.get("url")]
-    if sources:
+    if sources and not brief:
         out.append("🔗 Fuentes")
         out += [f"{sym} ({n['source']}): {n['url']}" for sym, n in sources]
         out.append("")

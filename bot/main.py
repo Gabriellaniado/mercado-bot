@@ -9,8 +9,8 @@ import sys
 import yaml
 from dotenv import load_dotenv
 
-from bot import analysis, fundamentals, news, report, summarize, telegram
-from bot.prices import download_prices
+from bot import analysis, fundamentals, local_market, news, report, summarize, telegram
+from bot.prices import download_prices, drop_stale, market_cap
 from bot.universe import build_universe
 
 log = logging.getLogger("mercado-bot")
@@ -54,7 +54,7 @@ def add_explanations(
         entry["why"] = why_by_symbol.get(entry["symbol"], [])
 
 
-def build_text(cfg: dict) -> str:
+def build_text(cfg: dict, brief: bool = False) -> str:
     """Corre el análisis completo y devuelve el texto del informe."""
     signals_cfg = cfg["signals"]
     market_cfg = cfg.get("market_analysis", {})
@@ -62,13 +62,14 @@ def build_text(cfg: dict) -> str:
     universe = build_universe(cfg)
     symbols = analysis.required_symbols(universe, cfg)
     log.info("Descargando precios de %d activos...", len(symbols))
-    prices = download_prices(symbols)
+    prices = drop_stale(download_prices(symbols))
 
     panorama, last_date = analysis.build_panorama(prices, cfg.get("panorama", []))
     sectors, rotations = analysis.market_analysis(prices, market_cfg)
     movers, opportunities = analysis.classify_assets(
-        universe, prices, signals_cfg, set(cfg.get("cedears", []))
+        universe, prices, signals_cfg, set(cfg.get("cedears", [])), market_cap
     )
+    local = local_market.build_local_market(prices, cfg.get("local_market", {}), last_date)
     flagged = analysis.unique_flagged(movers, opportunities, signals_cfg["max_news_symbols"])
 
     headlines = news.collect_news(flagged, read_feeds(cfg.get("feeds", [])), cfg["trusted_sources"])
@@ -77,12 +78,12 @@ def build_text(cfg: dict) -> str:
 
     date_str = last_date.strftime("%d/%m/%Y") if last_date is not None else "sin fecha"
     return report.build_report(
-        date_str, panorama, movers, opportunities, narrative, headlines, sectors, rotations
+        date_str, panorama, movers, opportunities, narrative, headlines, sectors, rotations, local, brief
     )
 
 
-def run(cfg_path: str = "config.yaml", dry_run: bool = False) -> str:
-    text = build_text(load_config(cfg_path))
+def run(cfg_path: str = "config.yaml", dry_run: bool = False, brief: bool = False) -> str:
+    text = build_text(load_config(cfg_path), brief)
     if dry_run:
         print(text)
     else:
@@ -105,6 +106,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Informe diario de mercado")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--dry-run", action="store_true", help="imprime el informe sin enviarlo")
+    parser.add_argument("--brief", action="store_true", help="omite lo que explica el resumen de la rutina")
     parser.add_argument("--send-file", help="envía por Telegram un informe ya redactado y termina")
     args = parser.parse_args()
 
@@ -115,7 +117,7 @@ def main() -> None:
     if args.send_file:
         send_file(args.send_file)
     else:
-        run(args.config, args.dry_run)
+        run(args.config, args.dry_run, args.brief)
 
 
 if __name__ == "__main__":

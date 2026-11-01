@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import pandas as pd
 
 from bot import signals
 
 log = logging.getLogger(__name__)
+
+SP500_GROUP = "S&P 500"
 
 
 def required_symbols(universe: list[dict], cfg: dict) -> list[str]:
@@ -17,6 +20,7 @@ def required_symbols(universe: list[dict], cfg: dict) -> list[str]:
     symbols = {item["symbol"] for item in universe}
     symbols |= {item["symbol"] for item in cfg.get("panorama", [])}
     symbols |= {item["symbol"] for item in market.get("sectors", []) + market.get("styles", [])}
+    symbols |= {item["symbol"] for item in cfg.get("local_market", {}).get("panel", [])}
     if market:
         symbols.add(market["benchmark"])
     return sorted(symbols)
@@ -58,13 +62,40 @@ def market_analysis(prices: dict[str, pd.DataFrame], cfg: dict) -> tuple[list[di
     return sectors, rotations
 
 
+def _take_important(entries: list[dict], limit: int, is_important: Callable[[dict], bool]) -> list[dict]:
+    """Recorre en orden y frena al llegar al límite, para consultar la menor cantidad posible."""
+    picked: list[dict] = []
+    for entry in entries:
+        if len(picked) == limit:
+            break
+        if is_important(entry):
+            picked.append(entry)
+    return picked
+
+
 def classify_assets(
     universe: list[dict],
     prices: dict[str, pd.DataFrame],
     signals_cfg: dict,
     cedears: set[str],
+    get_market_cap: Callable[[str], float | None] = lambda symbol: None,
 ) -> tuple[list[dict], list[dict]]:
-    """Separa los grandes movimientos y los activos con CEDEAR a revisar, ya ordenados y recortados."""
+    """Separa los grandes movimientos y los activos con CEDEAR a revisar, ya ordenados y recortados.
+
+    Las empresas del S&P 500 por debajo de la capitalización mínima quedan afuera. Si Yahoo no
+    informa el dato se mantienen, para que una falla no vacíe el informe.
+    """
+    min_cap = signals_cfg.get("min_market_cap_usd_bn", 0) * 1e9
+    caps: dict[str, float | None] = {}
+
+    def is_important(entry: dict) -> bool:
+        if entry["group"] != SP500_GROUP or not min_cap:
+            return True
+        symbol = entry["symbol"]
+        if symbol not in caps:
+            caps[symbol] = get_market_cap(symbol)
+        return caps[symbol] is None or caps[symbol] >= min_cap
+
     movers, opportunities = [], []
     for item in universe:
         symbol = item["symbol"]
@@ -83,7 +114,10 @@ def classify_assets(
     # Primero lo que se puede operar con CEDEAR; dentro de cada grupo, lo más inusual.
     movers.sort(key=lambda m: (m["symbol"] in cedears, abs(m["z"])), reverse=True)
     opportunities.sort(key=lambda o: o["dist_high_pct"])
-    return movers[: signals_cfg["max_movers"]], opportunities[: signals_cfg["max_opportunities"]]
+    return (
+        _take_important(movers, signals_cfg["max_movers"], is_important),
+        _take_important(opportunities, signals_cfg["max_opportunities"], is_important),
+    )
 
 
 def unique_flagged(movers: list[dict], opportunities: list[dict], limit: int) -> list[dict]:

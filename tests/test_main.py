@@ -31,6 +31,7 @@ def cfg():
             "industry_map": {"Semiconductors": "SMH"},
             "sector_map": {},
         },
+        "local_market": {"panel": [{"symbol": "GGAL.BA", "label": "Galicia"}], "dollars": []},
         "cedears": ["INTC"],
         "feeds": [],
         "trusted_sources": ["cnbc"],
@@ -45,10 +46,15 @@ def offline(monkeypatch, price_frame):
         "SPY": price_frame(-0.01),
         "SMH": price_frame(-0.02, seed=1),
         "INTC": price_frame(-0.20, seed=2),
+        "GGAL.BA": price_frame(0.03, seed=4),
     }
     universe = [{"symbol": "INTC", "name": "Intel", "group": "S&P 500", "keywords": []}]
     monkeypatch.setattr(main, "build_universe", lambda cfg: universe)
     monkeypatch.setattr(main, "download_prices", lambda symbols: prices)
+    monkeypatch.setattr(main, "market_cap", lambda symbol: 300e9)
+    monkeypatch.setattr(main.local_market, "fetch_dollars", lambda cfg, as_of: [])
+    monkeypatch.setattr(main.local_market, "fetch_country_risk", lambda as_of: None)
+    monkeypatch.setattr(main.local_market, "fetch_merval", lambda: None)
     monkeypatch.setattr(main.news, "fetch_feed_items", lambda feeds: [])
     monkeypatch.setattr(
         main.news,
@@ -69,6 +75,16 @@ def test_build_text_end_to_end(cfg, offline):
     assert "[CEDEAR]" in text
     assert "🏭 Semiconductores -2.0%: el movimiento es sobre todo propio" in text
     assert "📰 Intel se hunde (CNBC)" in text
+    assert "🟢 Suben: Galicia +3.0%" in text
+
+
+def test_brief_text_drops_what_the_summary_explains(cfg, offline):
+    text = main.build_text(cfg, brief=True)
+    assert "📰" not in text
+    assert "🏭" not in text
+    assert "❓" not in text
+    assert "🔗" not in text
+    assert "🔴 INTC (Intel) -20.0%" in text
 
 
 def test_build_text_without_prices_has_no_date(cfg, offline, monkeypatch):
@@ -110,10 +126,10 @@ def test_run_sends_by_telegram(cfg, offline, monkeypatch, tmp_path, capsys):
 def test_main_passes_command_line_arguments(monkeypatch):
     calls = []
     monkeypatch.setattr(main, "load_dotenv", lambda: None)
-    monkeypatch.setattr(main, "run", lambda path, dry_run: calls.append((path, dry_run)))
-    monkeypatch.setattr(sys, "argv", ["bot", "--config", "otro.yaml", "--dry-run"])
+    monkeypatch.setattr(main, "run", lambda path, dry_run, brief: calls.append((path, dry_run, brief)))
+    monkeypatch.setattr(sys, "argv", ["bot", "--config", "otro.yaml", "--dry-run", "--brief"])
     main.main()
-    assert calls == [("otro.yaml", True)]
+    assert calls == [("otro.yaml", True, True)]
 
 
 def test_send_file_sends_the_written_report(monkeypatch, tmp_path):

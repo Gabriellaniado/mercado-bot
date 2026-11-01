@@ -14,12 +14,12 @@ signals:
   min_drawdown_pct: 20.0     # y al menos 20% por debajo del máximo de 52 semanas
   max_movers: 3              # máximo de movimientos grandes (primero los que tienen CEDEAR)
   max_opportunities: 3       # máximo de "a revisar" en el informe
+  min_market_cap_usd_bn: 100 # capitalización mínima del S&P 500, en miles de millones de dólares
   max_news_symbols: 8        # activos para los que se buscan noticias y contexto
 
 # Panorama general (solo se muestra la variación del día)
 panorama:
   - {symbol: "^GSPC", label: "S&P 500"}
-  - {symbol: "^MERV", label: "Merval"}
   - {symbol: "^BVSP", label: "Bovespa"}
   - {symbol: "GC=F", label: "Oro"}
   - {symbol: "CL=F", label: "Petróleo WTI"}
@@ -77,6 +77,38 @@ market_analysis:
     - [XLK, XLF]    # tecnología / financieras
     - [XLK, XLE]    # tecnología / energía
     - [SPY, IWM]    # grandes / pequeñas empresas
+
+# Mercado argentino. Dólares y riesgo país vienen de api.argentinadatos.com.
+local_market:
+  ccl_label: CCL
+  top: 3                     # cuántas suben y bajan se muestran
+  dollars:
+    - {casa: oficial, label: Oficial}
+    - {casa: bolsa, label: MEP}
+    - {casa: contadoconliqui, label: CCL}
+    - {casa: blue, label: Blue}
+  panel:                     # acciones del panel líder, en pesos
+    - {symbol: GGAL.BA, label: Galicia}
+    - {symbol: YPFD.BA, label: YPF}
+    - {symbol: PAMP.BA, label: Pampa}
+    - {symbol: BMA.BA, label: Macro}
+    - {symbol: BBAR.BA, label: BBVA}
+    - {symbol: SUPV.BA, label: Supervielle}
+    - {symbol: BYMA.BA, label: BYMA}
+    - {symbol: VALO.BA, label: Valores}
+    - {symbol: TXAR.BA, label: Ternium}
+    - {symbol: ALUA.BA, label: Aluar}
+    - {symbol: CEPU.BA, label: Central Puerto}
+    - {symbol: TGSU2.BA, label: TGS}
+    - {symbol: TGNO4.BA, label: TGN}
+    - {symbol: TRAN.BA, label: Transener}
+    - {symbol: EDN.BA, label: Edenor}
+    - {symbol: METR.BA, label: Metrogas}
+    - {symbol: LOMA.BA, label: Loma Negra}
+    - {symbol: TECO2.BA, label: Telecom}
+    - {symbol: CRES.BA, label: Cresud}
+    - {symbol: COME.BA, label: Comercial del Plata}
+    - {symbol: MIRG.BA, label: Mirgor}
 
 # El S&P 500 se descarga de Wikipedia al ejecutar. Si falla, se usa esta lista corta.
 sp500_fallback:

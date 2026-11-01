@@ -110,3 +110,33 @@ def test_unique_flagged_removes_repeats_and_applies_limit():
     opportunities = [{"symbol": "A", "reasons": []}, {"symbol": "C"}]
     assert [e["symbol"] for e in analysis.unique_flagged(movers, opportunities, 3)] == ["A", "B", "C"]
     assert len(analysis.unique_flagged(movers, opportunities, 1)) == 1
+
+
+def test_small_sp500_companies_are_skipped_but_other_groups_stay(price_frame):
+    signals_cfg = {**SIGNALS, "min_market_cap_usd_bn": 100, "max_movers": 3}
+    prices = {"GRANDE": price_frame(-0.20), "CHICA": price_frame(-0.30), "YPF": price_frame(-0.10)}
+    universe = [item("GRANDE"), item("CHICA"), {**item("YPF"), "group": "Argentina"}]
+    caps = {"GRANDE": 300e9, "CHICA": 30e9}
+    movers, _ = analysis.classify_assets(universe, prices, signals_cfg, set(), caps.get)
+    assert {m["symbol"] for m in movers} == {"GRANDE", "YPF"}
+
+
+def test_unknown_market_cap_stays_in_the_report(price_frame):
+    signals_cfg = {**SIGNALS, "min_market_cap_usd_bn": 100}
+    movers, _ = analysis.classify_assets(
+        [item("X")], {"X": price_frame(-0.20)}, signals_cfg, set(), lambda symbol: None
+    )
+    assert [m["symbol"] for m in movers] == ["X"]
+
+
+def test_market_cap_is_only_requested_until_the_limit(price_frame):
+    signals_cfg = {**SIGNALS, "min_market_cap_usd_bn": 100, "max_movers": 1}
+    prices = {"A": price_frame(-0.30), "B": price_frame(-0.20)}
+    calls = []
+
+    def cap(symbol):
+        calls.append(symbol)
+        return 300e9
+
+    analysis.classify_assets([item("A"), item("B")], prices, signals_cfg, set(), cap)
+    assert len(calls) == 1
