@@ -111,6 +111,9 @@ def _asset_block(entry: dict, asset: dict | None) -> list[str]:
     cedear = " · CEDEAR" if entry.get("tag") else ""
     title = f"{dot(entry['ret_pct'])} <b>{escape(entry['symbol'])}</b> {pct(entry['ret_pct'])}{cedear}"
     out = [title]
+    if entry.get("side") and entry.get("reasons"):
+        word = "compra" if entry["side"] == "compra" else "venta"
+        out.append(f"⚡ Señal de {word}: " + escape("; ".join(entry["reasons"])))
     if not asset:
         return [*out, NO_RECOMMENDATION, "<i>Sin análisis para este activo.</i>", ""]
 
@@ -144,7 +147,14 @@ def build_final_report(
     out += _local_section(local, analysis.get("local"))
     out += ["💼 <b>EMPRESAS Y RECOMENDACIONES</b>", DIVIDER]
     if flagged:
-        for entry in flagged:
+        # Primero lo accionable (comprar/vender), después mantener y lo que no tiene análisis.
+        order = {"comprar": 0, "vender": 0, "mantener": 1}
+
+        def rank(entry: dict) -> int:
+            asset = analysis["assets"].get(entry["symbol"]) or {}
+            return order.get(asset.get("recommendation"), 2)
+
+        for entry in sorted(flagged, key=rank):
             out += _asset_block(entry, analysis["assets"].get(entry["symbol"]))
     else:
         out += ["Sin movimientos ni activos para revisar hoy.", ""]

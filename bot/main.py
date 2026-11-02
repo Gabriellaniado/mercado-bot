@@ -37,12 +37,13 @@ def add_explanations(
     headlines: dict[str, list[dict]],
     sectors: list[dict],
     market_cfg: dict,
+    get_context=fundamentals.fetch_context,
 ) -> None:
     """Agrega a cada activo las líneas que explican por qué está en ese nivel."""
     why_by_symbol = {
         entry["symbol"]: fundamentals.explain(
             entry,
-            fundamentals.fetch_context(entry["symbol"]),
+            get_context(entry["symbol"]),
             sectors,
             market_cfg.get("sector_map", {}),
             market_cfg.get("industry_map", {}),
@@ -66,14 +67,21 @@ def build_text(cfg: dict, ai_analysis: dict | None = None) -> str:
 
     panorama, last_date = analysis.build_panorama(prices, cfg.get("panorama", []))
     sectors, rotations = analysis.market_analysis(prices, market_cfg)
+    contexts: dict[str, dict] = {}  # cada activo se consulta una sola vez a Yahoo
+
+    def get_context(symbol: str) -> dict:
+        if symbol not in contexts:
+            contexts[symbol] = fundamentals.fetch_context(symbol)
+        return contexts[symbol]
+
     movers, opportunities = analysis.classify_assets(
-        universe, prices, signals_cfg, set(cfg.get("cedears", [])), market_cap
+        universe, prices, signals_cfg, set(cfg.get("cedears", [])), market_cap, get_context
     )
     local = local_market.build_local_market(prices, cfg.get("local_market", {}), last_date)
     flagged = analysis.unique_flagged(movers, opportunities, signals_cfg["max_news_symbols"])
 
     headlines = news.collect_news(flagged, read_feeds(cfg.get("feeds", [])), cfg["trusted_sources"])
-    add_explanations(movers, opportunities, flagged, headlines, sectors, market_cfg)
+    add_explanations(movers, opportunities, flagged, headlines, sectors, market_cfg, get_context)
     date_str = last_date.strftime("%d/%m/%Y") if last_date is not None else "sin fecha"
     if ai_analysis is not None:
         return analyst.build_final_report(date_str, panorama, sectors, rotations, local, flagged, ai_analysis)

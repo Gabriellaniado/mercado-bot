@@ -51,6 +51,25 @@ def fetch_context(symbol: str) -> dict:
     return ctx
 
 
+def analyst_view(ctx: dict, close: float) -> dict | None:
+    """Opinión de los analistas: precio objetivo medio contra el precio actual y recomendación.
+
+    Devuelve None si Yahoo no informa el precio objetivo ni la recomendación.
+    """
+    target = ctx.get("targetMeanPrice")
+    key = ctx.get("recommendationKey")
+    upside = (target / close - 1) * 100 if _is_number(target) and close else None
+    if upside is None and key not in RECOMMENDATIONS:
+        return None
+    count = ctx.get("numberOfAnalystOpinions")
+    return {
+        "upside_pct": upside,
+        "opinion": key if key in RECOMMENDATIONS else None,
+        "opinion_label": RECOMMENDATIONS.get(key),
+        "count": int(count) if _is_number(count) else 0,
+    }
+
+
 def parse_earnings(dates: pd.DataFrame | None, as_of) -> tuple[dict | None, object | None]:
     """Devuelve el último resultado publicado y la fecha del próximo."""
     if dates is None or len(dates) == 0:

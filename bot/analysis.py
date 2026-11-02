@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from bot import signals
+from bot import fundamentals, signals
 
 log = logging.getLogger(__name__)
 
@@ -79,12 +79,17 @@ def classify_assets(
     signals_cfg: dict,
     cedears: set[str],
     get_market_cap: Callable[[str], float | None] = lambda symbol: None,
+    get_context: Callable[[str], dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Separa los grandes movimientos y los activos con CEDEAR a revisar, ya ordenados y recortados.
 
     Las empresas del S&P 500 por debajo de la capitalización mínima quedan afuera. Si Yahoo no
     informa el dato se mantienen, para que una falla no vacíe el informe.
+
+    Con `analyst_opinion` activo y `get_context`, cada señal se ajusta según lo que opinan los
+    analistas (solo se consulta a los activos que ya tienen señal).
     """
+    use_analysts = bool(signals_cfg.get("analyst_opinion")) and get_context is not None
     min_cap = signals_cfg.get("min_market_cap_usd_bn", 0) * 1e9
     caps: dict[str, float | None] = {}
 
@@ -107,16 +112,22 @@ def classify_assets(
         if signals.is_big_move(sig, signals_cfg, item["group"]):
             movers.append(entry)
         if symbol in cedears:
-            reasons = signals.opportunity_reasons(sig, signals_cfg)
-            if reasons:
-                opportunities.append({**entry, "reasons": reasons})
+            found = signals.opportunity_signal(sig, signals_cfg)
+            if found and use_analysts:
+                view = fundamentals.analyst_view(get_context(symbol), sig["close"])
+                found = signals.apply_analyst_view(found, view, signals_cfg)
+            if found:
+                opportunities.append({**entry, **found})
 
     # Primero lo que se puede operar con CEDEAR; dentro de cada grupo, lo más inusual.
     movers.sort(key=lambda m: (m["symbol"] in cedears, abs(m["z"])), reverse=True)
-    opportunities.sort(key=lambda o: o["dist_high_pct"])
+    opportunities.sort(key=lambda o: o["score"], reverse=True)
+    buys = [o for o in opportunities if o["side"] == "compra"]
+    sells = [o for o in opportunities if o["side"] == "venta"]
     return (
         _take_important(movers, signals_cfg["max_movers"], is_important),
-        _take_important(opportunities, signals_cfg["max_opportunities"], is_important),
+        _take_important(buys, signals_cfg["max_opportunities"], is_important)
+        + _take_important(sells, signals_cfg.get("max_sell_signals", 0), is_important),
     )
 
 
@@ -124,5 +135,8 @@ def unique_flagged(movers: list[dict], opportunities: list[dict], limit: int) ->
     """Activos marcados sin repetir, para no buscar dos veces sus noticias y su contexto."""
     by_symbol: dict[str, dict] = {}
     for entry in movers + opportunities:
-        by_symbol.setdefault(entry["symbol"], entry)
+        current = by_symbol.setdefault(entry["symbol"], entry)
+        if "side" in entry and "side" not in current:
+            # Un gran movimiento que además tiene señal conserva el motivo de la señal.
+            by_symbol[entry["symbol"]] = {**current, "side": entry["side"], "reasons": entry["reasons"]}
     return list(by_symbol.values())[:limit]

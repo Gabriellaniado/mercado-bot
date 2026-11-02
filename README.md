@@ -6,7 +6,18 @@ Revisa el S&P 500, materias primas (oro, plata, petróleo, uranio, etc.) y accio
 - **Análisis de mercado**: sectores mejores y peores que el S&P 500 y posibles rotaciones (por ejemplo, de semiconductores a software), calculados solo con precios. Indican que un sector le ganó a otro, no por qué.
 - **Mercado local**: MSCI Merval en pesos y en dólares CCL, riesgo país, dólares y las acciones del panel que más suben y bajan.
 - **Grandes movimientos**: hasta 3 variaciones fuera de lo normal (según la volatilidad de los últimos 20 días), primero las que tienen CEDEAR. Del S&P 500 solo entran empresas de más de US$100.000 millones (`min_market_cap_usd_bn`).
-- **A revisar**: hasta 2 activos con CEDEAR muy por debajo de su máximo anual y sobrevendidos (RSI) o cerca de su mínimo de 52 semanas.
+- **Oportunidades** (solo activos con CEDEAR), con tres tipos de señal:
+  - **Compra por rebote**: al menos 15% bajo su máximo anual y sobrevendido (RSI ≤ 35) o a menos de 10% de su mínimo de 52 semanas.
+  - **Compra por ruptura**: llega a un máximo de 52 semanas con volumen 1,5 veces mayor al habitual.
+  - **Venta**: sobrecomprado (RSI ≥ 70) y a menos de 5% de su máximo anual.
+  - **Cruces de medias móviles**: cruce dorado y cruce de la muerte (media de 50 contra la de 200) y cruce de la media de 20 contra la de 50, solo si ocurrieron en las últimas 3 ruedas.
+  - **Figuras chartistas**: doble techo y doble piso confirmados (el precio rompe el piso o el techo entre los dos picos) y ruptura de un rango lateral de 20 ruedas.
+  - **Soportes y resistencias de tendencia**: traza la recta que une mínimos cada vez más altos (o máximos cada vez más bajos) y exige al menos tres toques. Marca el rebote sobre la línea o su ruptura, e indica el nivel aproximado.
+  - **Opinión de analistas**: cada señal se contrasta con el precio objetivo y la recomendación media de Yahoo (si hay 5 analistas o más). Si coinciden, la señal sube en el informe y dice "analistas a favor"; si la contradicen, baja y dice "analistas en contra". Nunca se descarta una señal por esto.
+
+  Si un activo junta varias señales del mismo lado, se suman los puntajes y sube en el informe. Las figuras se detectan con reglas simples y pueden fallar: sirven para mirar el gráfico, no para confirmarlo. Se apagan con `chart_signals: false`.
+
+  Los umbrales y la cantidad de señales (`max_opportunities`, `max_sell_signals`) se cambian en `config.yaml`. Con valores más exigentes el bot es más cauteloso; con valores más bajos, más arriesgado.
 - **Contexto de cada activo**: si reaccionó a un balance, si acompaña a su sector, ventas, margen, valuación, opinión de analistas y qué falta confirmar.
 - **Noticias**: usa **solo fuentes de una lista confiable** (`trusted_sources` en `config.yaml`). Si no hay titulares de esas fuentes, lo dice en lugar de inventar una causa.
 

@@ -9,11 +9,28 @@ signals:
     "Materias primas": 2.5
     "Argentina": 5.0
     "Brasil": 4.0
-  rsi_oversold: 30           # RSI(14) en o debajo de este valor = sobrevendido
-  near_52w_low_pct: 5.0      # a menos de 5% del mínimo de 52 semanas
-  min_drawdown_pct: 20.0     # y al menos 20% por debajo del máximo de 52 semanas
+  # Señales de compra por rebote (más permisivas que antes: 30 / 5% / 20%)
+  rsi_oversold: 35           # RSI(14) en o debajo de este valor = sobrevendido
+  near_52w_low_pct: 10.0     # a menos de 10% del mínimo de 52 semanas
+  min_drawdown_pct: 15.0     # y al menos 15% por debajo del máximo de 52 semanas
+  # Señales de compra por ruptura: máximo de 52 semanas con volumen alto (0 = desactivado)
+  breakout_volume_ratio: 1.5 # volumen de hoy al menos 1,5 veces el promedio de 20 días
+  # Señales de venta: sobrecomprado y pegado al máximo anual (rsi_overbought 0 = desactivado)
+  rsi_overbought: 70
+  near_52w_high_pct: 5.0     # a menos de 5% del máximo de 52 semanas
+  # Cruces de medias móviles y figuras chartistas (false = desactivado). Detecta: cruce dorado y
+  # de la muerte (medias de 50 y 200), cruce de 20 y 50, doble techo, doble piso, ruptura de rango
+  # y soportes/resistencias de tendencia trazados con tres toques (rebote o ruptura).
+  chart_signals: true
+  # Opinión de los analistas (precio objetivo y recomendación de Yahoo). No descarta señales:
+  # las que coinciden suben puestos y las que contradicen bajan; el motivo queda escrito.
+  analyst_opinion: true
+  analyst_min_upside_pct: 15 # "alcista" = objetivo al menos 15% sobre el precio y recomendación de compra
+  analyst_min_count: 5       # se ignora la opinión si hay menos de 5 analistas
+  analyst_weight: 20         # puntos que suma o resta al puntaje de la señal
   max_movers: 3              # máximo de movimientos grandes (primero los que tienen CEDEAR)
-  max_opportunities: 2       # máximo de "a revisar" en el informe
+  max_opportunities: 3       # máximo de señales de compra en el informe
+  max_sell_signals: 2        # máximo de señales de venta en el informe
   min_market_cap_usd_bn: 100 # capitalización mínima del S&P 500, en miles de millones de dólares
   max_news_symbols: 8        # activos para los que se buscan noticias y contexto
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+SIDES = {"compra": ("🟢", "COMPRA"), "venta": ("🔴", "VENTA")}
 DISCLAIMER = "⚠️ Son señales automáticas para revisar, no una recomendación de inversión."
 
 
@@ -107,10 +108,14 @@ def build_report(
         out += ["Sin movimientos fuera de lo normal.", ""]
 
     mover_symbols = {m["symbol"] for m in movers}
-    out.append("👀 A revisar (activos con CEDEAR)")
+    out.append("👀 Oportunidades (activos con CEDEAR)")
     if opportunities:
         for o in opportunities:
-            out.append(f"🟡 {o['symbol']} ({o['name']}) {fmt_pct(o['ret_pct'])}: " + "; ".join(o["reasons"]))
+            icon, word = SIDES.get(o.get("side"), SIDES["compra"])
+            out.append(
+                f"{icon} {word} {o['symbol']} ({o['name']}) {fmt_pct(o['ret_pct'])}: "
+                + "; ".join(o["reasons"])
+            )
             if o["symbol"] in mover_symbols:
                 out.append("Contexto en Grandes movimientos.")
             else:

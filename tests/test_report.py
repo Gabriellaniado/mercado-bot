@@ -79,3 +79,11 @@ def test_market_analysis_without_rotation_or_sides():
     text = "\n".join(build_market_analysis(flat, []))
     assert "Sin señales claras" in text
     assert text.count("- Ninguno.") == 2
+
+
+def test_report_labels_buy_and_sell_signals():
+    buy = asset(symbol="AAA", name="A", side="compra", reasons=["RSI 25 (sobrevendido)"])
+    sell = asset(symbol="BBB", name="B", side="venta", reasons=["RSI 78 (sobrecomprado)"])
+    text = build_report("01/11/2026", [], [], [buy, sell], None, {})
+    assert "🟢 COMPRA AAA (A)" in text
+    assert "🔴 VENTA BBB (B)" in text

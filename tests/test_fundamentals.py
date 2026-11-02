@@ -2,6 +2,7 @@ from datetime import date
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from bot import fundamentals as f
 
@@ -137,3 +138,19 @@ def test_fetch_context_survives_errors(monkeypatch, caplog):
     monkeypatch.setattr(f.yf, "Ticker", lambda symbol: Broken())
     assert f.fetch_context("URA") == {}
     assert "URA" in caplog.text
+
+
+def test_analyst_view_compares_target_with_price():
+    ctx = {"targetMeanPrice": 120.0, "recommendationKey": "buy", "numberOfAnalystOpinions": 30}
+    assert f.analyst_view(ctx, 100.0) == {
+        "upside_pct": pytest.approx(20.0),
+        "opinion": "buy",
+        "opinion_label": "compra",
+        "count": 30,
+    }
+
+
+def test_analyst_view_without_data_is_none():
+    assert f.analyst_view({}, 100.0) is None
+    assert f.analyst_view({"recommendationKey": "none"}, 100.0) is None
+    assert f.analyst_view({"recommendationKey": "hold"}, 100.0)["upside_pct"] is None

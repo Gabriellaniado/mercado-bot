@@ -139,3 +139,23 @@ def test_no_sector_side_when_nothing_beats_the_index():
     flat = [{"label": "A", "ret_1d": 0.0, "rel_1d": 0.0}]
     text = build(sectors=flat, rotations=[])
     assert "🔎 <b>SECTORES</b>\n\n" in text
+
+
+def test_signal_line_is_shown_for_flagged_asset():
+    entry = {**ENTRY, "side": "venta", "reasons": ["RSI 78 (sobrecomprado)"]}
+    text = build(flagged=[entry])
+    assert "⚡ Señal de venta: RSI 78 (sobrecomprado)" in text
+
+
+def test_actionable_recommendations_come_first():
+    flagged = [
+        {"symbol": "AAA", "ret_pct": 1.0, "tag": ""},
+        {"symbol": "BBB", "ret_pct": 1.0, "tag": ""},
+        {"symbol": "CCC", "ret_pct": 1.0, "tag": ""},
+    ]
+    assets = {
+        "AAA": {"recommendation": "mantener", "confidence": "baja"},
+        "CCC": {"recommendation": "comprar", "confidence": "alta"},
+    }
+    text = build(flagged=flagged, analysis={"assets": assets})
+    assert text.index("<b>CCC</b>") < text.index("<b>AAA</b>") < text.index("<b>BBB</b>")

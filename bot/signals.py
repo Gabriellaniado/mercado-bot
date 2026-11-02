@@ -6,6 +6,8 @@ import math
 
 import pandas as pd
 
+from bot import patterns
+
 
 def rsi(close: pd.Series, n: int = 14) -> float:
     """RSI de Wilder del último dato. Devuelve NaN si no hay datos suficientes."""
@@ -55,6 +57,7 @@ def compute_signals(symbol: str, df: pd.DataFrame) -> dict | None:
         "rsi": float(rsi(close)),
         "dist_high_pct": float((last / window.max() - 1) * 100),
         "dist_low_pct": float((last / window.min() - 1) * 100),
+        "chart": patterns.chart_signals([float(x) for x in close]),
     }
 
 
@@ -134,18 +137,111 @@ def is_big_move(sig: dict, cfg: dict, group: str) -> bool:
     return abs(sig["ret_pct"]) >= threshold
 
 
-def opportunity_reasons(sig: dict, cfg: dict) -> list[str]:
-    """Motivos por los que un activo merece una mirada. Lista vacía = no hay señal.
+def opportunity_signal(sig: dict, cfg: dict) -> dict | None:
+    """Señal de compra o de venta para revisar. None = no hay señal.
 
-    Es una señal técnica para revisar, no una recomendación de compra.
+    Reúne todas las señales que tiene el activo hoy: rebote, ruptura de máximo, sobrecompra y,
+    si `chart_signals` está activo, cruces de medias y figuras. Elige el lado con más puntaje y
+    junta sus motivos: cuantas más señales coinciden, más arriba queda en el informe.
+    Es una señal técnica para revisar, no una recomendación.
     """
-    if sig["dist_high_pct"] > -cfg["min_drawdown_pct"]:
-        return []
-    reasons = []
-    if not math.isnan(sig["rsi"]) and sig["rsi"] <= cfg["rsi_oversold"]:
-        reasons.append(f"RSI {sig['rsi']:.0f} (sobrevendido)")
-    if sig["dist_low_pct"] <= cfg["near_52w_low_pct"]:
-        reasons.append(f"a {sig['dist_low_pct']:.1f}% de su mínimo de 52 semanas")
-    if reasons:
-        reasons.append(f"{abs(sig['dist_high_pct']):.0f}% bajo su máximo anual")
-    return reasons
+    rsi_now = sig["rsi"]
+    has_rsi = not math.isnan(rsi_now)
+    found: list[dict] = []
+
+    if sig["dist_high_pct"] <= -cfg["min_drawdown_pct"]:
+        reasons = []
+        if has_rsi and rsi_now <= cfg["rsi_oversold"]:
+            reasons.append(f"RSI {rsi_now:.0f} (sobrevendido)")
+        if sig["dist_low_pct"] <= cfg["near_52w_low_pct"]:
+            reasons.append(f"a {sig['dist_low_pct']:.1f}% de su mínimo anual")
+        if reasons:
+            reasons.append(f"{abs(sig['dist_high_pct']):.0f}% bajo su máximo")
+            found.append({"side": "compra", "reasons": reasons, "score": abs(sig["dist_high_pct"])})
+
+    vol_ratio = sig.get("vol_ratio", math.nan)
+    breakout_vol = cfg.get("breakout_volume_ratio")
+    if (
+        breakout_vol
+        and sig["dist_high_pct"] >= -1.0
+        and sig["ret_pct"] > 0
+        and not math.isnan(vol_ratio)
+        and vol_ratio >= breakout_vol
+    ):
+        found.append(
+            {
+                "side": "compra",
+                "reasons": ["rompe su máximo de 52 semanas", f"volumen x{vol_ratio:.1f}"],
+                "score": vol_ratio * 10,
+            }
+        )
+
+    overbought = cfg.get("rsi_overbought")
+    if (
+        overbought
+        and has_rsi
+        and rsi_now >= overbought
+        and sig["dist_high_pct"] >= -cfg.get("near_52w_high_pct", 5.0)
+    ):
+        found.append(
+            {
+                "side": "venta",
+                "reasons": [
+                    f"RSI {rsi_now:.0f} (sobrecomprado)",
+                    f"a {abs(sig['dist_high_pct']):.1f}% de su máximo anual",
+                ],
+                "score": rsi_now,
+            }
+        )
+
+    if cfg.get("chart_signals"):
+        for chart in sig.get("chart", []):
+            found.append({"side": chart["side"], "reasons": [chart["label"]], "score": chart["score"]})
+
+    if not found:
+        return None
+    totals = {"compra": 0.0, "venta": 0.0}
+    for item in found:
+        totals[item["side"]] += item["score"]
+    side = "compra" if totals["compra"] >= totals["venta"] else "venta"
+    winners = [item for item in found if item["side"] == side]
+    return {
+        "side": side,
+        "reasons": [reason for item in winners for reason in item["reasons"]],
+        "score": totals[side],
+    }
+
+
+BUY_OPINIONS = {"strong_buy", "buy"}
+SELL_OPINIONS = {"underperform", "sell", "strong_sell"}
+
+
+def apply_analyst_view(found: dict, view: dict | None, cfg: dict) -> dict:
+    """Ajusta una señal según lo que opinan los analistas. No la descarta: la ordena y la rotula.
+
+    A favor: compra con analistas alcistas (recomendación de compra y objetivo bien por encima
+    del precio), o venta con analistas bajistas (recomendación de venta, u objetivo por debajo
+    del precio sin recomendación de compra). En contra: lo opuesto. Si hay pocos analistas, o la
+    opinión es mixta, la señal queda igual.
+    """
+    if not view or view["count"] < cfg.get("analyst_min_count", 5):
+        return found
+    upside, opinion = view["upside_pct"], view["opinion"]
+    bullish = (
+        upside is not None and upside >= cfg.get("analyst_min_upside_pct", 15.0) and opinion in BUY_OPINIONS
+    )
+    bearish = opinion in SELL_OPINIONS or (upside is not None and upside <= 0 and opinion not in BUY_OPINIONS)
+    if bullish == bearish:  # opinión mixta o neutral
+        return found
+    agrees = bullish if found["side"] == "compra" else bearish
+    weight = cfg.get("analyst_weight", 20)
+    parts = [view["opinion_label"]] if view["opinion_label"] else []
+    if upside is not None:
+        parts.append(f"objetivo {upside:+.0f}%")
+    text = ("analistas a favor" if agrees else "analistas en contra") + f" ({', '.join(parts)})"
+    return {
+        **found,
+        "reasons": [*found["reasons"], text],
+        "score": found["score"] + (weight if agrees else -weight),
+        "analysts": "favor" if agrees else "contra",
+    }

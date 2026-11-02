@@ -140,3 +140,59 @@ def test_market_cap_is_only_requested_until_the_limit(price_frame):
 
     analysis.classify_assets([item("A"), item("B")], prices, signals_cfg, set(), cap)
     assert len(calls) == 1
+
+
+def test_sell_signals_have_their_own_limit(price_frame):
+    # Sube sin pausa: sobrecomprado y en su máximo anual
+    prices = {symbol: price_frame(0.0) for symbol in ("S1", "S2", "S3")}
+    for frame in prices.values():
+        frame["Close"] = [60 + i * (40 / 59) for i in range(len(frame))]
+    signals_cfg = {**SIGNALS, "rsi_overbought": 70, "max_sell_signals": 2}
+    universe = [item(symbol) for symbol in prices]
+    _, opportunities = analysis.classify_assets(universe, prices, signals_cfg, set(prices))
+    assert [o["side"] for o in opportunities] == ["venta", "venta"]
+
+
+def test_sell_signals_are_off_without_limit(price_frame):
+    prices = {"S1": price_frame(0.0)}
+    prices["S1"]["Close"] = [60 + i * (40 / 59) for i in range(len(prices["S1"]))]
+    signals_cfg = {**SIGNALS, "rsi_overbought": 70}
+    _, opportunities = analysis.classify_assets([item("S1")], prices, signals_cfg, {"S1"})
+    assert opportunities == []
+
+
+def test_unique_flagged_keeps_signal_of_a_mover():
+    movers = [{"symbol": "A", "ret_pct": 5.0}]
+    opportunities = [{"symbol": "A", "side": "venta", "reasons": ["RSI 80 (sobrecomprado)"]}]
+    flagged = analysis.unique_flagged(movers, opportunities, 3)
+    assert flagged == [
+        {"symbol": "A", "ret_pct": 5.0, "side": "venta", "reasons": ["RSI 80 (sobrecomprado)"]}
+    ]
+
+
+def test_analysts_reorder_and_label_signals_only_when_enabled(price_frame):
+    prices = {"CED1": price_frame(-0.30), "CED2": price_frame(-0.40)}
+    universe = [item(symbol) for symbol in prices]
+    asked = []
+    contexts = {
+        "CED1": {"targetMeanPrice": 1e6, "recommendationKey": "strong_buy", "numberOfAnalystOpinions": 30},
+        "CED2": {"targetMeanPrice": 1.0, "recommendationKey": "sell", "numberOfAnalystOpinions": 30},
+    }
+
+    def get_context(symbol):
+        asked.append(symbol)
+        return contexts[symbol]
+
+    cfg = {**SIGNALS, "max_opportunities": 2, "analyst_opinion": True, "analyst_weight": 100}
+    _, opportunities = analysis.classify_assets(universe, prices, cfg, set(prices), get_context=get_context)
+    # CED2 cayó más, pero los analistas lo contradicen: queda detrás de CED1
+    assert [o["symbol"] for o in opportunities] == ["CED1", "CED2"]
+    assert opportunities[0]["analysts"] == "favor"
+    assert opportunities[1]["analysts"] == "contra"
+    assert sorted(asked) == ["CED1", "CED2"]
+
+    asked.clear()
+    off = {**cfg, "analyst_opinion": False}
+    _, plain = analysis.classify_assets(universe, prices, off, set(prices), get_context=get_context)
+    assert [o["symbol"] for o in plain] == ["CED2", "CED1"]
+    assert asked == []
