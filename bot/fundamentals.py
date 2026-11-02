@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 
 import numpy as np
 import pandas as pd
@@ -35,18 +36,35 @@ RECOMMENDATIONS = {
 }
 
 
+def _with_retries(call, what: str, attempts: int = 3, pause: float = 2.0):
+    """Yahoo corta con 401/429 desde IPs de la nube: se reintenta con pausas crecientes."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return call()
+        except Exception as exc:  # noqa: BLE001
+            if attempt == attempts:
+                raise
+            log.info("%s falló (%s), reintento %d/%d", what, type(exc).__name__, attempt, attempts - 1)
+            time.sleep(pause * attempt)
+
+
 def fetch_context(symbol: str) -> dict:
-    """Baja datos de Yahoo. Si algo falla devuelve lo que haya: los ETF no tienen balances."""
+    """Baja datos de Yahoo. Si algo falla devuelve lo que haya: los ETF no tienen balances.
+
+    `complete` queda en False si algún pedido falló, para no guardar en caché un contexto a medias.
+    """
     ticker = yf.Ticker(symbol)
-    ctx: dict = {}
+    ctx: dict = {"complete": True}
     try:
-        info = ticker.info or {}
+        info = _with_retries(lambda: ticker.info, f"datos de {symbol}") or {}
         ctx.update({k: info.get(k) for k in INFO_KEYS})
     except Exception as exc:  # noqa: BLE001
+        ctx["complete"] = False
         log.warning("Sin datos de empresa para %s: %s", symbol, exc)
     try:
-        ctx["earnings_dates"] = ticker.earnings_dates
+        ctx["earnings_dates"] = _with_retries(lambda: ticker.earnings_dates, f"resultados de {symbol}")
     except Exception as exc:  # noqa: BLE001
+        ctx["complete"] = False
         log.warning("Sin fechas de resultados para %s: %s", symbol, exc)
     return ctx
 

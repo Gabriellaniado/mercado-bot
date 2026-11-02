@@ -60,3 +60,17 @@ def test_drop_stale_tolerates_a_long_weekend(price_frame):
     recent = price_frame()
     recent.index = recent.index - pd.Timedelta(days=4)
     assert set(prices.drop_stale({"A": price_frame(), "B": recent})) == {"A", "B"}
+
+
+def test_market_cap_retries_before_giving_up(monkeypatch):
+    calls = []
+
+    class Ticker:
+        def __init__(self, symbol):
+            calls.append(symbol)
+            self.fast_info = {"marketCap": 7.0} if len(calls) == 3 else {}
+
+    monkeypatch.setattr(prices.yf, "Ticker", Ticker)
+    monkeypatch.setattr(prices.time, "sleep", lambda s: None)
+    assert prices.market_cap("X") == 7.0
+    assert len(calls) == 3

@@ -224,3 +224,9 @@ feeds:
 summary:
   model: "claude-sonnet-5-5"
   max_tokens: 1500
+
+# Caché de la corrida: la rutina corre el bot varias veces seguidas y así no repite pedidos a Yahoo.
+# Vence sola, así que un día nunca usa datos de otro. Borrar la sección la desactiva.
+cache:
+  path: /tmp/mercado-bot-cache.pkl
+  ttl_minutes: 180

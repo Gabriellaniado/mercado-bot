@@ -136,8 +136,30 @@ def test_fetch_context_survives_errors(monkeypatch, caplog):
             raise RuntimeError("sin fechas")
 
     monkeypatch.setattr(f.yf, "Ticker", lambda symbol: Broken())
-    assert f.fetch_context("URA") == {}
+    monkeypatch.setattr(f.time, "sleep", lambda s: None)
+    assert f.fetch_context("URA") == {"complete": False}
     assert "URA" in caplog.text
+
+
+def test_fetch_context_retries_a_throttled_request(monkeypatch):
+    calls = []
+
+    class Flaky:
+        @property
+        def info(self):
+            calls.append(1)
+            if len(calls) < 3:
+                raise RuntimeError("401 Invalid Crumb")
+            return {"sector": "Energy"}
+
+        earnings_dates = "fechas"
+
+    monkeypatch.setattr(f.yf, "Ticker", lambda symbol: Flaky())
+    monkeypatch.setattr(f.time, "sleep", lambda s: None)
+    ctx = f.fetch_context("COP")
+    assert ctx["sector"] == "Energy"
+    assert ctx["complete"] is True
+    assert len(calls) == 3
 
 
 def test_analyst_view_compares_target_with_price():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import pandas as pd
 import yfinance as yf
@@ -15,11 +16,14 @@ MAX_STALE_DAYS = 5
 
 def market_cap(symbol: str) -> float | None:
     """Capitalización en dólares, o None si Yahoo no la informa."""
-    try:
-        return yf.Ticker(symbol).fast_info["marketCap"]
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Sin capitalización para %s: %s", symbol, type(exc).__name__)
-        return None
+    for attempt in range(3):
+        try:
+            return yf.Ticker(symbol).fast_info["marketCap"]
+        except Exception as exc:  # noqa: BLE001
+            if attempt == 2:
+                log.warning("Sin capitalización para %s: %s", symbol, type(exc).__name__)
+                return None
+            time.sleep(1.0 * (attempt + 1))
 
 
 def download_prices(symbols: list[str], batch: int = 100) -> dict[str, pd.DataFrame]:

@@ -10,6 +10,7 @@ import yaml
 from dotenv import load_dotenv
 
 from bot import analysis, analyst, fundamentals, local_market, news, report, summarize, telegram
+from bot import cache as run_cache
 from bot.prices import download_prices, drop_stale, market_cap
 from bot.universe import build_universe
 
@@ -63,25 +64,47 @@ def build_text(cfg: dict, ai_analysis: dict | None = None) -> str:
     universe = build_universe(cfg)
     symbols = analysis.required_symbols(universe, cfg)
     log.info("Descargando precios de %d activos...", len(symbols))
-    prices = drop_stale(download_prices(symbols))
+    store = run_cache.RunCache(**cfg.get("cache", {}))
+    raw_prices = store.get("prices")
+    if raw_prices is None:
+        raw_prices = download_prices(symbols)
+        if raw_prices:
+            store.put("prices", raw_prices)
+    else:
+        log.info("Precios tomados de la caché.")
+    prices = drop_stale(raw_prices)
 
     panorama, last_date = analysis.build_panorama(prices, cfg.get("panorama", []))
     sectors, rotations = analysis.market_analysis(prices, market_cfg)
-    contexts: dict[str, dict] = {}  # cada activo se consulta una sola vez a Yahoo
+    contexts: dict[str, dict] = store.get("contexts") or {}  # cada activo se consulta una vez a Yahoo
+    caps: dict[str, float | None] = store.get("caps") or {}
 
     def get_context(symbol: str) -> dict:
         if symbol not in contexts:
-            contexts[symbol] = fundamentals.fetch_context(symbol)
+            ctx = fundamentals.fetch_context(symbol)
+            if not ctx.get("complete", True):
+                return ctx  # incompleto: no se guarda, así la próxima corrida lo reintenta
+            contexts[symbol] = ctx
         return contexts[symbol]
 
+    def get_cap(symbol: str) -> float | None:
+        if symbol not in caps:
+            value = market_cap(symbol)
+            if value is None:
+                return None
+            caps[symbol] = value
+        return caps[symbol]
+
     movers, opportunities = analysis.classify_assets(
-        universe, prices, signals_cfg, set(cfg.get("cedears", [])), market_cap, get_context
+        universe, prices, signals_cfg, set(cfg.get("cedears", [])), get_cap, get_context
     )
     local = local_market.build_local_market(prices, cfg.get("local_market", {}), last_date)
     flagged = analysis.unique_flagged(movers, opportunities, signals_cfg["max_news_symbols"])
 
     headlines = news.collect_news(flagged, read_feeds(cfg.get("feeds", [])), cfg["trusted_sources"])
     add_explanations(movers, opportunities, flagged, headlines, sectors, market_cfg, get_context)
+    store.put("caps", caps)
+    store.put("contexts", contexts)
     date_str = last_date.strftime("%d/%m/%Y") if last_date is not None else "sin fecha"
     if ai_analysis is not None:
         return analyst.build_final_report(date_str, panorama, sectors, rotations, local, flagged, ai_analysis)

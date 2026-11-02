@@ -156,3 +156,30 @@ def test_invalid_analysis_fails_before_downloading(cfg, monkeypatch, tmp_path):
     monkeypatch.setattr(main, "download_prices", fail)
     with pytest.raises(ValueError, match="assets"):
         main.run(write_config(tmp_path, cfg), analysis_path=str(analysis_file))
+
+
+def test_second_run_reuses_the_cache(cfg, offline, monkeypatch, tmp_path):
+    cfg["cache"] = {"path": str(tmp_path / "cache.pkl"), "ttl_minutes": 60}
+    first = main.build_text(cfg)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("tenía que salir de la caché")
+
+    monkeypatch.setattr(main, "download_prices", forbidden)
+    monkeypatch.setattr(main, "market_cap", forbidden)
+    monkeypatch.setattr(main.fundamentals, "fetch_context", forbidden)
+    assert main.build_text(cfg) == first
+
+
+def test_incomplete_context_is_not_cached(cfg, offline, monkeypatch, tmp_path):
+    cfg["cache"] = {"path": str(tmp_path / "cache.pkl"), "ttl_minutes": 60}
+    monkeypatch.setattr(main.fundamentals, "fetch_context", lambda s: {"complete": False})
+    main.build_text(cfg)
+    assert main.run_cache.RunCache(**cfg["cache"]).get("contexts") == {}
+
+
+def test_empty_download_is_not_cached(cfg, offline, monkeypatch, tmp_path):
+    cfg["cache"] = {"path": str(tmp_path / "cache.pkl"), "ttl_minutes": 60}
+    monkeypatch.setattr(main, "download_prices", lambda symbols: {})
+    main.build_text(cfg)
+    assert main.run_cache.RunCache(**cfg["cache"]).get("prices") is None
